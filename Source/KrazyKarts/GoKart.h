@@ -43,17 +43,22 @@ private:
 
 	// The force applied to the car when the throttle is fully down (N)
 	UPROPERTY(EditAnywhere)
-	float MaxDrivingForce = 1000.f;
+	float MaxDrivingForce = 100000.f;
 
-	// The number of degrees rotated per second at full control throw (degree/s)
+	// Minimum radius of the car turning circle at full lock (m)
 	UPROPERTY(EditAnywhere)
-	float MaxDegreePerSecond = 90.f;
+	float MinTurningRadius = 10.f;
 
-	// Higher means more drag (kg/m)
+	// Higher means more drag (kg/cm)
 	UPROPERTY(EditAnywhere)
-	float DragCoefficient = 90.f;
+	float DragCoefficient = 180.f;
 
-	FVector GetResistance();
+	// Higher means more rolling resistance (kg/cm)
+	UPROPERTY(EditAnywhere)
+	float RollingResistanceCoefficient = 0.015f;
+
+	FVector GetAirResistance();
+	FVector GetRollingResistance();
 
 	void MoveForward(const FInputActionValue& Value);
 	void StopMoveForward(const FInputActionValue& Value);
