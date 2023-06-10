@@ -42,8 +42,14 @@ void AGoKart::Tick(float DeltaTime)
 
 	Velocity = Velocity + Acceleration * DeltaTime;
 
+	WG_VECTOR(Velocity);
+
 	ApplyRotation(DeltaTime);
 	UpdateLocationFromVelocity(DeltaTime);
+
+	FString EnumString;
+	UEnum::GetValueAsString(GetLocalRole(), EnumString);
+	DrawDebugString(GetWorld(), FVector(0,0,100.f), EnumString, this, FColor::White, DeltaTime);
 }
 
 // Called to bind functionality to input
@@ -77,21 +83,65 @@ FVector AGoKart::GetRollingResistance()
 void AGoKart::MoveForward(const FInputActionValue& Value)
 {
 	Throttle = Value.GetMagnitude();
+	Server_MoveForward(Value);
 }
 
 void AGoKart::StopMoveForward(const FInputActionValue& Value)
 {
 	Throttle = 0.f;
+	Server_StopMoveForward(Value);
 }
 
 void AGoKart::MoveRight(const FInputActionValue& Value)
 {
 	SteeringThrow = Value.GetMagnitude();
+	Server_MoveRight(Value);
 }
 
 void AGoKart::StopMoveRight(const FInputActionValue& Value)
 {
 	SteeringThrow = 0.f;
+	Server_StopMoveRight(Value);
+}
+
+void AGoKart::Server_MoveForward_Implementation(const FInputActionValue& Value)
+{
+	Throttle = Value.GetMagnitude();
+}
+
+bool AGoKart::Server_MoveForward_Validate(const FInputActionValue& Value)
+{
+	return Value.GetMagnitude() <= 1 && Value.GetMagnitude() >= -1;
+}
+
+void AGoKart::Server_StopMoveForward_Implementation(const FInputActionValue& Value)
+{
+	Throttle = 0.f;
+}
+
+bool AGoKart::Server_StopMoveForward_Validate(const FInputActionValue& Value)
+{
+	return true;
+}
+
+void AGoKart::Server_MoveRight_Implementation(const FInputActionValue& Value)
+{
+	SteeringThrow = Value.GetMagnitude();
+}
+
+bool AGoKart::Server_MoveRight_Validate(const FInputActionValue& Value)
+{
+	return Value.GetMagnitude() <= 1 && Value.GetMagnitude() >= -1;
+}
+
+void AGoKart::Server_StopMoveRight_Implementation(const FInputActionValue& Value)
+{
+	SteeringThrow = 0.f;
+}
+
+bool AGoKart::Server_StopMoveRight_Validate(const FInputActionValue& Value)
+{
+	return true;
 }
 
 void AGoKart::UpdateLocationFromVelocity(float DeltaTime)
@@ -111,7 +161,7 @@ void AGoKart::ApplyRotation(float DeltaTime)
 	float DeltaLocation = FVector::DotProduct(GetActorForwardVector(), Velocity) * DeltaTime;
 	float RotationAngle = DeltaLocation / MinTurningRadius * SteeringThrow;
 	FQuat RotationDelta(GetActorUpVector(), RotationAngle);
-	AddActorWorldRotation(RotationDelta);
-
 	Velocity = RotationDelta.RotateVector(Velocity);
+
+	AddActorWorldRotation(RotationDelta);
 }

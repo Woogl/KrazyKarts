@@ -61,10 +61,24 @@ private:
 	FVector GetRollingResistance();
 
 	void MoveForward(const FInputActionValue& Value);
+
 	void StopMoveForward(const FInputActionValue& Value);
 
 	void MoveRight(const FInputActionValue& Value);
+
 	void StopMoveRight(const FInputActionValue& Value);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_MoveForward(const FInputActionValue& Value);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_StopMoveForward(const FInputActionValue& Value);
+	
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_MoveRight(const FInputActionValue& Value);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_StopMoveRight(const FInputActionValue& Value);
 
 	void UpdateLocationFromVelocity(float DeltaTime);
 	void ApplyRotation(float DeltaTime);
