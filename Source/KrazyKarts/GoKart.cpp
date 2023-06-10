@@ -3,6 +3,7 @@
 
 #include "GoKart.h"
 #include <../Plugins/EnhancedInput/Source/EnhancedInput/Public/EnhancedInputComponent.h>
+#include <../Plugins/EnhancedInput/Source/EnhancedInput/Public/EnhancedInputSubsystems.h>
 
 // Sets default values
 AGoKart::AGoKart()
@@ -16,7 +17,15 @@ AGoKart::AGoKart()
 void AGoKart::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	//Add Input Mapping Context
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+		{
+			Subsystem->AddMappingContext(DefaultMappingContext, 0);
+		}
+	}
 }
 
 // Called every frame
@@ -25,13 +34,15 @@ void AGoKart::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	FVector Force = GetActorForwardVector() * MaxDrivingForce * Throttle;
+
+	Force += GetResistance();
+
 	FVector Acceleration = Force / Mass;
 
 	Velocity = Velocity + Acceleration * DeltaTime;
 
-	FVector Translation = Velocity * DeltaTime;
-
-	AddActorWorldOffset(Translation);
+	ApplyRotation(DeltaTime);
+	UpdateLocationFromVelocity(DeltaTime);
 }
 
 // Called to bind functionality to input
@@ -43,48 +54,55 @@ void AGoKart::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent)) {
 
 		//Moving
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AGoKart::Move);
-
-		//Looking
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AGoKart::Look);
-
+		EnhancedInputComponent->BindAction(MoveForwardAction, ETriggerEvent::Triggered, this, &AGoKart::MoveForward);
+		EnhancedInputComponent->BindAction(MoveForwardAction, ETriggerEvent::Completed, this, &AGoKart::StopMoveForward);
+		EnhancedInputComponent->BindAction(MoveRightAction, ETriggerEvent::Triggered, this, &AGoKart::MoveRight);
+		EnhancedInputComponent->BindAction(MoveRightAction, ETriggerEvent::Completed, this, &AGoKart::StopMoveRight);
 	}
 }
 
-void AGoKart::Move(const FInputActionValue& Value)
+FVector AGoKart::GetResistance()
+{
+	return -Velocity.GetSafeNormal() * Velocity.SizeSquared() * DragCoefficient;
+}
+
+void AGoKart::MoveForward(const FInputActionValue& Value)
 {
 	Throttle = Value.GetMagnitude();
+}
 
-	// input is a Vector2D
-	FVector2D MovementVector = Value.Get<FVector2D>();
+void AGoKart::StopMoveForward(const FInputActionValue& Value)
+{
+	Throttle = 0.f;
+}
 
-	if (Controller != nullptr)
+void AGoKart::MoveRight(const FInputActionValue& Value)
+{
+	SteeringThrow = Value.GetMagnitude();
+}
+
+void AGoKart::StopMoveRight(const FInputActionValue& Value)
+{
+	SteeringThrow = 0.f;
+}
+
+void AGoKart::UpdateLocationFromVelocity(float DeltaTime)
+{
+	FVector Translation = Velocity * 100 * DeltaTime;
+
+	FHitResult Hit;
+	AddActorWorldOffset(Translation, true, &Hit);
+	if (Hit.IsValidBlockingHit())
 	{
-		// find out which way is forward
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
-
-		// get forward vector
-		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-		// get right vector 
-		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-		// add movement 
-		AddMovementInput(ForwardDirection, MovementVector.Y);
-		AddMovementInput(RightDirection, MovementVector.X);
+		Velocity = FVector::ZeroVector;
 	}
 }
 
-void AGoKart::Look(const FInputActionValue& Value)
+void AGoKart::ApplyRotation(float DeltaTime)
 {
-	// input is a Vector2D
-	FVector2D LookAxisVector = Value.Get<FVector2D>();
+	float RotationAngle = MaxDegreePerSecond * DeltaTime * SteeringThrow;
+	FQuat RotationDelta(GetActorUpVector(), FMath::DegreesToRadians(RotationAngle));
+	AddActorWorldRotation(RotationDelta);
 
-	if (Controller != nullptr)
-	{
-		// add yaw and pitch input to controller
-		AddControllerYawInput(LookAxisVector.X);
-		AddControllerPitchInput(LookAxisVector.Y);
-	}
+	Velocity = RotationDelta.RotateVector(Velocity);
 }
