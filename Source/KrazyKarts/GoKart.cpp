@@ -4,6 +4,7 @@
 #include "GoKart.h"
 #include <../Plugins/EnhancedInput/Source/EnhancedInput/Public/EnhancedInputComponent.h>
 #include <../Plugins/EnhancedInput/Source/EnhancedInput/Public/EnhancedInputSubsystems.h>
+#include <Net/UnrealNetwork.h>
 
 // Sets default values
 AGoKart::AGoKart()
@@ -11,6 +12,7 @@ AGoKart::AGoKart()
  	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
+	bReplicates = true;
 }
 
 // Called when the game starts or when spawned
@@ -24,8 +26,20 @@ void AGoKart::BeginPlay()
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
+			WG_STRING(GetController()->GetName());
+		}
+		else
+		{
+			WG_TEXT("Input Mapping Failed");
 		}
 	}
+}
+
+void AGoKart::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AGoKart, ReplicatedLocation);
+	DOREPLIFETIME(AGoKart, ReplicatedRotation);
 }
 
 // Called every frame
@@ -34,7 +48,6 @@ void AGoKart::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	FVector Force = GetActorForwardVector() * MaxDrivingForce * Throttle;
-
 	Force += GetAirResistance();
 	Force += GetRollingResistance();
 
@@ -42,10 +55,19 @@ void AGoKart::Tick(float DeltaTime)
 
 	Velocity = Velocity + Acceleration * DeltaTime;
 
-	WG_VECTOR(Velocity);
-
 	ApplyRotation(DeltaTime);
 	UpdateLocationFromVelocity(DeltaTime);
+
+	if (HasAuthority())
+	{
+		ReplicatedLocation = GetActorLocation();
+		ReplicatedRotation = GetActorRotation();
+	}
+	else
+	{
+		SetActorLocation(ReplicatedLocation);
+		SetActorRotation(ReplicatedRotation);
+	}
 
 	FString EnumString;
 	UEnum::GetValueAsString(GetLocalRole(), EnumString);
@@ -84,6 +106,7 @@ void AGoKart::MoveForward(const FInputActionValue& Value)
 {
 	Throttle = Value.GetMagnitude();
 	Server_MoveForward(Value);
+	WG_STRING(GetName());
 }
 
 void AGoKart::StopMoveForward(const FInputActionValue& Value)
@@ -96,6 +119,7 @@ void AGoKart::MoveRight(const FInputActionValue& Value)
 {
 	SteeringThrow = Value.GetMagnitude();
 	Server_MoveRight(Value);
+	WG_STRING(GetName());
 }
 
 void AGoKart::StopMoveRight(const FInputActionValue& Value)
@@ -150,6 +174,7 @@ void AGoKart::UpdateLocationFromVelocity(float DeltaTime)
 
 	FHitResult Hit;
 	AddActorWorldOffset(Translation, true, &Hit);
+
 	if (Hit.IsValidBlockingHit())
 	{
 		Velocity = FVector::ZeroVector;
