@@ -2,8 +2,6 @@
 
 
 #include "GoKart.h"
-#include <../Plugins/EnhancedInput/Source/EnhancedInput/Public/EnhancedInputComponent.h>
-#include <../Plugins/EnhancedInput/Source/EnhancedInput/Public/EnhancedInputSubsystems.h>
 #include <Net/UnrealNetwork.h>
 
 // Sets default values
@@ -20,32 +18,32 @@ void AGoKart::BeginPlay()
 {
 	Super::BeginPlay();
 
-	//Add Input Mapping Context
-	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
-	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
-		{
-			Subsystem->AddMappingContext(DefaultMappingContext, 0);
-			WG_STRING(GetController()->GetName());
-		}
-		else
-		{
-			WG_TEXT("Input Mapping Failed");
-		}
-	}
 }
 
 void AGoKart::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(AGoKart, ReplicatedTransform);
+	DOREPLIFETIME(AGoKart, ServerState);
+	DOREPLIFETIME(AGoKart, Throttle);
+	DOREPLIFETIME(AGoKart, SteeringThrow);
 }
 
 // Called every frame
 void AGoKart::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (IsLocallyControlled())
+	{
+		FGoKartMove Move;
+		Move.DeltaTime = DeltaTime;
+		Move.SteeringThrow = SteeringThrow;
+		Move.Throttle = Throttle;
+		// TODO: Set Time
+
+		Server_SendMove(Move);
+	}
 
 	FVector Force = GetActorForwardVector() * MaxDrivingForce * Throttle;
 	Force += GetAirResistance();
@@ -60,7 +58,9 @@ void AGoKart::Tick(float DeltaTime)
 
 	if (HasAuthority())
 	{
-		ReplicatedTransform = GetActorTransform();
+		ServerState.Transform = GetActorTransform();
+		ServerState.Velocity = Velocity;
+		// TODO: update last move
 	}
 
 	FString EnumString;
@@ -73,15 +73,8 @@ void AGoKart::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	// Set up action bindings
-	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent)) {
-
-		//Moving
-		EnhancedInputComponent->BindAction(MoveForwardAction, ETriggerEvent::Triggered, this, &AGoKart::MoveForward);
-		EnhancedInputComponent->BindAction(MoveForwardAction, ETriggerEvent::Completed, this, &AGoKart::StopMoveForward);
-		EnhancedInputComponent->BindAction(MoveRightAction, ETriggerEvent::Triggered, this, &AGoKart::MoveRight);
-		EnhancedInputComponent->BindAction(MoveRightAction, ETriggerEvent::Completed, this, &AGoKart::StopMoveRight);
-	}
+	PlayerInputComponent->BindAxis(TEXT("MoveForward"), this, &AGoKart::MoveForward);
+	PlayerInputComponent->BindAxis(TEXT("MoveRight"), this, &AGoKart::MoveRight);
 }
 
 FVector AGoKart::GetAirResistance()
@@ -96,70 +89,25 @@ FVector AGoKart::GetRollingResistance()
 	return -Velocity.GetSafeNormal() * RollingResistanceCoefficient * NormalForce;
 }
 
-void AGoKart::MoveForward(const FInputActionValue& Value)
+void AGoKart::MoveForward(float Value)
 {
-	Throttle = Value.GetMagnitude();
-	Server_MoveForward(Value);
-	WG_STRING(GetName());
+	Throttle = Value;
 }
 
-void AGoKart::StopMoveForward(const FInputActionValue& Value)
+void AGoKart::MoveRight(float Value)
 {
-	Throttle = 0.f;
-	Server_StopMoveForward(Value);
+	SteeringThrow = Value;
 }
 
-void AGoKart::MoveRight(const FInputActionValue& Value)
+void AGoKart::Server_SendMove_Implementation(FGoKartMove Move)
 {
-	SteeringThrow = Value.GetMagnitude();
-	Server_MoveRight(Value);
-	WG_STRING(GetName());
+	Throttle = Move.Throttle;
+	SteeringThrow = Move.SteeringThrow;
 }
 
-void AGoKart::StopMoveRight(const FInputActionValue& Value)
+bool AGoKart::Server_SendMove_Validate(FGoKartMove Move)
 {
-	SteeringThrow = 0.f;
-	Server_StopMoveRight(Value);
-}
-
-void AGoKart::Server_MoveForward_Implementation(const FInputActionValue& Value)
-{
-	Throttle = Value.GetMagnitude();
-}
-
-bool AGoKart::Server_MoveForward_Validate(const FInputActionValue& Value)
-{
-	return Value.GetMagnitude() <= 1 && Value.GetMagnitude() >= -1;
-}
-
-void AGoKart::Server_StopMoveForward_Implementation(const FInputActionValue& Value)
-{
-	Throttle = 0.f;
-}
-
-bool AGoKart::Server_StopMoveForward_Validate(const FInputActionValue& Value)
-{
-	return true;
-}
-
-void AGoKart::Server_MoveRight_Implementation(const FInputActionValue& Value)
-{
-	SteeringThrow = Value.GetMagnitude();
-}
-
-bool AGoKart::Server_MoveRight_Validate(const FInputActionValue& Value)
-{
-	return Value.GetMagnitude() <= 1 && Value.GetMagnitude() >= -1;
-}
-
-void AGoKart::Server_StopMoveRight_Implementation(const FInputActionValue& Value)
-{
-	SteeringThrow = 0.f;
-}
-
-bool AGoKart::Server_StopMoveRight_Validate(const FInputActionValue& Value)
-{
-	return true;
+	return true;	// TODO: make better validation
 }
 
 void AGoKart::UpdateLocationFromVelocity(float DeltaTime)
@@ -185,7 +133,8 @@ void AGoKart::ApplyRotation(float DeltaTime)
 	AddActorWorldRotation(RotationDelta);
 }
 
-void AGoKart::OnRep_ReplicatedTransform()
+void AGoKart::OnRep_ServerState()
 {
-	SetActorTransform(ReplicatedTransform);
+	SetActorTransform(ServerState.Transform);
+	Velocity = ServerState.Velocity;
 }

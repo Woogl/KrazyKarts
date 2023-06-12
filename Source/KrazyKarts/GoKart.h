@@ -4,8 +4,40 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
-#include "InputActionValue.h"
 #include "GoKart.generated.h"
+
+USTRUCT()
+struct FGoKartMove
+{
+    GENERATED_USTRUCT_BODY()
+
+	UPROPERTY()
+	float Throttle;
+
+	UPROPERTY()
+	float SteeringThrow;
+
+	UPROPERTY()
+	float DeltaTime;
+
+	UPROPERTY()
+	float Time;
+};
+
+USTRUCT()
+struct FGoKartState
+{
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY()
+	FTransform Transform;
+
+	UPROPERTY()
+	FVector Velocity;
+
+	UPROPERTY()
+	FGoKartMove LastMove;
+};
 
 UCLASS()
 class KRAZYKARTS_API AGoKart : public APawn
@@ -60,38 +92,26 @@ private:
 	FVector GetAirResistance();
 	FVector GetRollingResistance();
 
-	void MoveForward(const FInputActionValue& Value);
-
-	void StopMoveForward(const FInputActionValue& Value);
-
-	void MoveRight(const FInputActionValue& Value);
-
-	void StopMoveRight(const FInputActionValue& Value);
+	void MoveForward(float Value);
+	void MoveRight(float Value);
 
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_MoveForward(const FInputActionValue& Value);
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_StopMoveForward(const FInputActionValue& Value);
-	
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_MoveRight(const FInputActionValue& Value);
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_StopMoveRight(const FInputActionValue& Value);
+	void Server_SendMove(FGoKartMove Move);
 
 	void UpdateLocationFromVelocity(float DeltaTime);
 	void ApplyRotation(float DeltaTime);
 
-	FVector Velocity;
-
-	UPROPERTY(ReplicatedUsing=OnRep_ReplicatedTransform)
-	FTransform ReplicatedTransform;
+	UPROPERTY(ReplicatedUsing = OnRep_ServerState)
+	FGoKartState ServerState;
 
 	UFUNCTION()
-	void OnRep_ReplicatedTransform();
+	void OnRep_ServerState();
 
+	FVector Velocity;
+
+	UPROPERTY(Replicated)
 	float Throttle;
 
+	UPROPERTY(Replicated)
 	float SteeringThrow;
 };
