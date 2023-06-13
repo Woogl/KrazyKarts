@@ -4,40 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "GoKartMovementComponent.h"
+#include "GoKartMovementReplicator.h"
 #include "GoKart.generated.h"
-
-USTRUCT()
-struct FGoKartMove
-{
-    GENERATED_USTRUCT_BODY()
-
-	UPROPERTY()
-	float Throttle;
-
-	UPROPERTY()
-	float SteeringThrow;
-
-	UPROPERTY()
-	float DeltaTime;
-
-	UPROPERTY()
-	float Time;
-};
-
-USTRUCT()
-struct FGoKartState
-{
-	GENERATED_USTRUCT_BODY()
-
-	UPROPERTY()
-	FTransform Transform;
-
-	UPROPERTY()
-	FVector Velocity;
-
-	UPROPERTY()
-	FGoKartMove LastMove;
-};
 
 UCLASS()
 class KRAZYKARTS_API AGoKart : public APawn
@@ -69,55 +38,13 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
-	void SimulateMove(const FGoKartMove& Move);
-
-	FGoKartMove CreateMove(float DeltaTime);
-	void ClearAcknowledgeMoves(FGoKartMove LastMove);
-
-	// Mass of the car (kg)
-	UPROPERTY(EditAnywhere)
-	float Mass = 1000.f;
-
-	// The force applied to the car when the throttle is fully down (N)
-	UPROPERTY(EditAnywhere)
-	float MaxDrivingForce = 100000.f;
-
-	// Minimum radius of the car turning circle at full lock (m)
-	UPROPERTY(EditAnywhere)
-	float MinTurningRadius = 10.f;
-
-	// Higher means more drag (kg/cm)
-	UPROPERTY(EditAnywhere)
-	float DragCoefficient = 180.f;
-
-	// Higher means more rolling resistance (kg/cm)
-	UPROPERTY(EditAnywhere)
-	float RollingResistanceCoefficient = 0.015f;
-
-	FVector GetAirResistance();
-	FVector GetRollingResistance();
-
 	void MoveForward(float Value);
 	void MoveRight(float Value);
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_SendMove(FGoKartMove Move);
-
-	void UpdateLocationFromVelocity(float DeltaTime);
-	void ApplyRotation(float DeltaTime, float SteeringThrow);
-
-	UPROPERTY(ReplicatedUsing = OnRep_ServerState)
-	FGoKartState ServerState;
-
-	UFUNCTION()
-	void OnRep_ServerState();
-
-	FVector Velocity;
-
-	float Throttle;
-	float SteeringThrow;
-
-	TArray<FGoKartMove> UnacknowledgedMoves;
-
 	void ShowAuthority(float DeltaTime);
+
+	UPROPERTY(VisibleAnywhere)
+	UGoKartMovementComponent* MovementComp;
+	UPROPERTY(VisibleAnywhere)
+	UGoKartMovementReplicator* MovementReplicator;
 };
