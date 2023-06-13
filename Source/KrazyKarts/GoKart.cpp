@@ -19,6 +19,7 @@ void AGoKart::BeginPlay()
 {
 	Super::BeginPlay();
 
+	SetReplicateMovement(false);
 }
 
 // Called every frame
