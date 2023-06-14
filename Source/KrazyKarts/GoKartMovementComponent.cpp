@@ -76,7 +76,7 @@ FVector UGoKartMovementComponent::GetRollingResistance()
 
 void UGoKartMovementComponent::UpdateLocationFromVelocity(float DeltaTime)
 {
-	FVector Translation = Velocity * 100 * DeltaTime;
+	FVector Translation = Velocity * 100* DeltaTime;
 
 	FHitResult Hit;
 	GetOwner()->AddActorWorldOffset(Translation, true, &Hit);

@@ -22,6 +22,14 @@ struct FGoKartState
 	FGoKartMove LastMove;
 };
 
+struct FHermitCubicSpline
+{
+	FVector StartLocation, StartDerivative, TargetLocation, TargetDerivative;
+
+	FVector IntepolateLocation(float LerpRatio) const { return FMath::CubicInterp(StartLocation, StartDerivative, TargetLocation, TargetDerivative, LerpRatio); }
+	FVector IntepolateDerivative(float LerpRatio) const	{ return FMath::CubicInterpDerivative(StartLocation, StartDerivative, TargetLocation, TargetDerivative, LerpRatio);	}
+};
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class KRAZYKARTS_API UGoKartMovementReplicator : public UActorComponent
 {
@@ -46,6 +54,12 @@ private:
 
 	void ClientTick(float DeltaTime);
 
+	void InterpolateRotation(float LerpRatio);
+
+	FHermitCubicSpline CreateSpline();
+	void InterpolateLocation(const FHermitCubicSpline& Spline, float LerpRatio);
+	void InterpolateVelocity(const FHermitCubicSpline& Spline, float LerpRatio);
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SendMove(FGoKartMove Move);
 
@@ -62,7 +76,15 @@ private:
 	float ClientTimeSinceUpdate;
 	float ClientTimeBetweenLastUpdates;
 	FTransform ClientStartTransform;
+	FVector ClientStartVelocity;
+	float ClientSimulatedTime;
 
 	UPROPERTY()
 	UGoKartMovementComponent* MovementComp;
+
+	UPROPERTY()
+	USceneComponent* MeshOffsetRoot;
+
+	UFUNCTION(BlueprintCallable)
+	void SetMeshOffsetRoot(USceneComponent* Root) { MeshOffsetRoot = Root; }
 };
